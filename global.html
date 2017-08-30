@@ -1,0 +1,135 @@
+<!-- http://graham  -->
+<!DOCTYPE html>
+<html>
+   <head>
+    <script type="text/javascript" charset="utf-8">
+
+    var addTorrent = {};
+    var icon = "";
+    var title = "Torrent";
+
+    // from https://github.com/bogenpirat/remote-torrent-adder
+    // here is theoretically where you would add other handlers
+    addTorrent["rutorrent"] = function (server, data) {
+      var xhr = new XMLHttpRequest();
+      var url = "http";
+      url += (server.hostsecure ? "s" : "");
+      url += "://";
+      url += server.host;
+      url += ":" + server.port;
+      if(server.relativepath == undefined || server.relativepath[0] != "/")
+        url += "/"; // first slash
+      if(server.relativepath != undefined)
+        url += server.relativepath;
+      if(server.relativepath != undefined && server.relativepath.length != 0 && server.relativepath[server.relativepath.length - 1] != "/")
+        url += "/"; // trailing slash
+      url += "php/addtorrent.php?";
+      if (server.rutorrentaddpaused)
+        url += "&torrents_start_stopped=1";
+
+      xhr.open("POST", url, true, server.login, server.password);
+      xhr.onreadystatechange = function(data) {
+        if(xhr.readyState == 4 && xhr.status == 200) {
+          if(/.*addTorrentSuccess.*/.exec(xhr.responseText)) {
+            console.log("Success Torrent added successfully.");
+          } else {
+            console.log("Failure Server didn't accept data:\n" + xhr.status + ": " + xhr.responseText, true);
+          }
+        } else if(xhr.readyState == 4 && xhr.status != 200) {
+          console.log("Failure Server responded with an irregular HTTP error code:\n" + xhr.status + ": " + xhr.responseText);
+        }
+      };
+
+      // stolen from from https://github.com/bogenpirat/remote-torrent-adder
+      var boundary = "AJAX-----------------------" + (new Date).getTime();
+      var message = "";
+
+      if (data.substring(0,7) == "magnet:") {
+        xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+        xhr.send("url=" + encodeURIComponent(data));
+      } else {
+
+        xhr.setRequestHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
+        message += "--" + boundary + "\r\n";
+        message += "Content-Disposition: form-data; name=\"torrent_file\"; filename=\"" + (new Date).getTime() + ".torrent\"\r\n";
+        message += "Content-Type: application/x-bittorrent\r\n\r\n";
+        message += data + "\r\n";
+        message += "--" + boundary + "--\r\n";
+
+        // xhr.sendAsBinary work around
+        var nBytes = message.length
+        var ui8Data = new Uint8Array(nBytes);
+        for (var nIdx = 0; nIdx < nBytes; nIdx++) {
+          ui8Data[nIdx] = message.charCodeAt(nIdx) & 0xff;
+        }
+        xhr.send(ui8Data);
+      }
+    };
+
+    function getTorrent(server, url) {
+      if (url.substring(0,7) == "magnet:") {
+        console.log('handle magnet later')
+      } else {
+        var xhr = new XMLHttpRequest();
+        xhr.open("GET", url, true);
+        xhr.overrideMimeType("text/plain; charset=x-user-defined");
+        xhr.onreadystatechange = function(data) {
+          if(xhr.readyState == 4 && xhr.status == 200) {
+            console.log('adding torent to remote server')
+            addTorrent[server.client](server, xhr.responseText);
+          } else if(xhr.readyState == 4 && xhr.status < 99) {
+            console.log("Connection failed", "The server sent an irregular HTTP error code: " + xhr.status, true);
+          } else if(xhr.readyState == 4 && xhr.status != 200) {
+            console.log("Connection failed", "The server sent the following HTTP error code: " + xhr.status, true);
+          }
+        };
+      xhr.send(null);
+      }
+    }
+
+    var settings={};
+
+    // global settings
+    function settingsChanged(){
+      settings = {
+        host: safari.extension.settings.getItem('host'),
+        port: safari.extension.settings.getItem('port'),
+        username: safari.extension.settings.getItem('username'),
+        password: safari.extension.settings.getItem('password'),
+        relativepath: safari.extension.settings.getItem('relativepath'),
+        client: safari.extension.settings.getItem('client'),
+        hostsecure: safari.extension.settings.getItem('hostsecure')
+      };
+    }
+
+    safari.extension.settings.addEventListener("change", settingsChanged, false);
+    settingsChanged();
+
+    safari.application.addEventListener("message", function(msg){
+      switch(msg.name){
+
+        // do this when a torrent is clicked
+        case 'addTorrent':
+          try {
+            var message = "Torrent added:" + msg.message.split('/').pop();
+            getTorrent(settings, msg.message);
+            if (window.webkitNotifications.checkPermission() == 0) {
+               window.webkitNotifications.createNotification(icon, title, message).show();
+            } else {
+              window.webkitNotifications.requestPermission(function () {
+                window.webkitNotifications.createNotification(icon, title, message).show();
+              });
+            }
+          } catch(err) {
+            window.webkitNotifications.createNotification("", "Error", "Error adding torrent").show();
+          }
+          break;
+        default:
+          return console.log("unhandled global message: " + msg.name, msg);
+      }
+    }, false);
+
+    </script>
+   </head>
+   <body></body>
+</html>
