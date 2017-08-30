@@ -4,18 +4,6 @@ var linkmatches = [
   "magnet:"
 ];
 
-// handle events from global
-safari.self.addEventListener("message", function(msg){
-  switch(msg.name){
-    case "log": // handle global console logs
-      return console.log("global:", msg.message);
-
-    default: // unhandled
-      return console.log("tab: " + msg.name, msg);
-  }
-}, false);
-
-
 
 /**
  * gather all the links on a page that might contain a torrent

@@ -68,7 +68,7 @@
 
     function getTorrent(server, url) {
       if (url.substring(0,7) == "magnet:") {
-        console.log('handle magnet later')
+        addTorrent[server.client](server, url)
       } else {
         var xhr = new XMLHttpRequest();
         xhr.open("GET", url, true);
